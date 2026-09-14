@@ -23,6 +23,17 @@ type successResponse struct {
 	Trend      string `json:"trend"`
 }
 
+// newSuccessResponse 由领域对象 telegram 构造响应模型，
+// 供 /decode 与 /decode-batch 共享。
+func newSuccessResponse(t telegram) successResponse {
+	return successResponse{
+		Station:    t.Station,
+		ObservedAt: t.ObservedAt.Format("2006-01-02T15:04:05Z"),
+		LevelMM:    t.LevelMM,
+		Trend:      t.Trend,
+	}
+}
+
 func main() {
 	healthcheck := flag.Bool("healthcheck", false, "对本地 API 做一次健康检查后退出（供容器 HEALTHCHECK 使用）")
 	flag.Parse()
@@ -30,12 +41,7 @@ func main() {
 		os.Exit(runHealthcheck())
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/decode", decodeHandler)
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = io.WriteString(w, "ok")
-	})
+	mux := newMux()
 
 	addr := ":" + port()
 	log.Printf("tidegram listening on %s", addr)
@@ -120,12 +126,19 @@ func decodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(successResponse{
-		Station:    t.Station,
-		ObservedAt: t.ObservedAt.Format("2006-01-02T15:04:05Z"),
-		LevelMM:    t.LevelMM,
-		Trend:      t.Trend,
+	_ = json.NewEncoder(w).Encode(newSuccessResponse(t))
+}
+
+// newMux 注册全部路由；测试与 main 共用同一份路由表。
+func newMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/decode", decodeHandler)
+	mux.HandleFunc("/decode-batch", decodeBatchHandler)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = io.WriteString(w, "ok")
 	})
+	return mux
 }
 
 // writeError 只输出错误码本身，不携带任何报文字段信息。
