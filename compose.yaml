@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    image: tidegram-api:latest
+    environment:
+      PORT: "8080"
+    ports:
+      # 宿主端口可用 API_PORT 覆盖，容器内固定监听 8080。
+      - "${API_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  # 一次性验收服务：等待 api 健康后执行黑盒验收，结束即退出。
+  verify:
+    build:
+      context: .
+      target: verify
+    image: tidegram-verify:latest
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      BASE_URL: "http://api:8080"
+    restart: "no"
